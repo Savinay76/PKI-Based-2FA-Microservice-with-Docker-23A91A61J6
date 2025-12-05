@@ -1,233 +1,298 @@
-# PKI-Based-2FA-Microservice-with-Docker-23A91A61J6
+# PKI-Based 2FA Microservice with Docker (23A91A61J6)
 
-This project implements a complete PKI-based Two-Factor Authentication (2FA) microservice supporting RSA/OAEP seed decryption, TOTP generation, 2FA verification, cron automation, Docker containerization, and RSA-PSS commit proof generation.
+A complete PKI-based Two-Factor Authentication (2FA) microservice implementing secure RSA/OAEP seed decryption, TOTP generation, validation, cron automation, Docker containerization, and RSA-PSS commit proof.
 
-All requirements of the assignment are implemented and verified.
+This project satisfies all functional, cryptographic, Docker, cron, and submission requirements.
 
 ---
 
-## Features
+# 📁 Repository Structure
 
-### 1. RSA/OAEP Seed Decryption
-- Accepts encrypted seed from instructor API.
-- Decrypts using RSA-OAEP with SHA-256 and MGF1(SHA-256).
-- Stores decrypted 64-character hex seed into `/data/seed.txt` using a persistent Docker volume.
+```
 
-### 2. TOTP Generation (RFC 6238)
-- Converts hex seed into Base32.
-- Generates valid 6-digit TOTP codes (30-second interval).
-- Enforces UTC timezone for accuracy.
-- Available at `/generate-2fa`.
+.
+├── .gitattributes
+├── .gitignore
+├── Dockerfile
+├── docker-compose.yml
+├── encrypted_seed.txt
+├── instructor_public.pem
+├── README.md
+├── student_private.pem
+├── student_public.pem
+│
+├── app/
+│   ├── decrypt_seed.py
+│   ├── main.py
+│   └── totp.py
+│
+├── cron/
+│   └── 2fa-cron
+│
+├── data/
+│   └── seed.txt
+│
+└── scripts/
+├── generate_commit_proof.py
+├── generate_keys.py
+├── log_2fa_cron.py
+└── request_seed.py
 
-### 3. TOTP Verification
-- Verifies user-supplied TOTP codes.
-- Allows ±1 time-step tolerance (`valid_window=1`).
-- Available at `/verify-2fa`.
+```
 
-### 4. Cron Job Execution
-A cron job runs every minute and logs a new TOTP code into:
+---
+
+# 🔐 Core Features
+
+## 1️⃣ RSA/OAEP Seed Decryption
+- Decrypts encrypted seed received from the instructor API.
+- Uses:
+  - **RSA-OAEP**
+  - **SHA-256**
+  - **MGF1(SHA-256)**
+- Stores decrypted 64-hex seed in:
+```
+
+/data/seed.txt
+
+```
+- Seed persists across container restarts using Docker volumes.
+
+---
+
+## 2️⃣ TOTP Generation (RFC 6238)
+- Converts **Hex → Base32**.
+- Generates **6-digit TOTP codes every 30 seconds**.
+- UTC enforced for time accuracy.
+- Endpoint: `/generate-2fa`.
+
+---
+
+## 3️⃣ TOTP Verification
+- Verifies code with **±1 time-step tolerance** (`valid_window = 1`).
+- Endpoint: `/verify-2fa`.
+
+---
+
+## 4️⃣ Cron Job Automation
+- Runs **every minute**.
+- Logs new TOTP codes with UTC timestamps into:
+```
 
 /cron/last_code.txt
 
-markdown
-Copy code
-
-Cron file uses LF line endings (Linux-compatible).
-
-### 5. Dockerized Environment
-- Multi-stage Dockerfile for optimized image size.
-- FastAPI server via Uvicorn.
-- Cron daemon inside container.
-- Persistent volumes for seed and cron logs.
-- Port mapping: **8080:8080**.
-- Mounted key files for cryptographic operations.
-
-### 6. Docker Compose Setup
-- Defines service, volumes, and environment variables.
-- Ensures persistence across restarts.
-- Enforces UTC timezone.
-
-### 7. RSA-PSS Commit Proof
-A Python script generates:
-- Commit hash
-- RSA-PSS-SHA256 signature
-- Encrypted signature using instructor public key
-- Base64-encoded final proof
+````
+- Cron file uses **LF** line endings (required for Linux cron).
 
 ---
 
-## Repository Structure
+## 5️⃣ Dockerized Microservice
+Includes:
+- Multi-stage **Dockerfile**
+- FastAPI running via **Uvicorn**
+- Cron daemon inside container
+- Persistent Docker volumes
+- Port mapping `8080:8080`
 
-├── main.py
-├── totp.py
-├── request_seed.py
-├── decrypt_seed.py
-├── generate_commit_proof.py
-├── Dockerfile
-├── docker-compose.yml
-├── requirements.txt
-├── cron/
-│ └── 2fa-cron
-├── scripts/
-│ └── log_2fa_cron.py
-├── student_private.pem
-├── student_public.pem
-├── instructor_public.pem
-├── encrypted_seed.txt
-├── .gitattributes
-└── .gitignore
-
-pgsql
-Copy code
+Volumes:
+| Volume Name | Path |
+|-------------|-------|
+| seed-data | /data |
+| cron-output | /cron |
 
 ---
 
-## 🚀 API Endpoints
+## 6️⃣ RSA-PSS Commit Proof Generation
+Script `generate_commit_proof.py` generates:
+- Commit hash  
+- RSA-PSS (SHA-256) signature  
+- Signature encrypted using instructor public key (RSA-OAEP-SHA256)  
+- Base64 output (single line)
+
+Used for project verification.
 
 ---
 
-### **POST /decrypt-seed**
-- Decrypts the encrypted seed using RSA-OAEP-SHA256.
-- Stores the decrypted 64-character hex seed in `/data/seed.txt`.
+# 🧪 API Endpoints
 
-**Request**
+---
+
+### 🔸 **POST /decrypt-seed**
+
+Decrypts the instructor-provided encrypted seed.
+
+#### **Request**
 ```json
 {
-  "encrypted_seed": "BASE64_STRING"
+"encrypted_seed": "BASE64_STRING"
 }
-Response
+````
 
-json
-Copy code
+#### **Response**
+
+```json
 {
   "status": "ok",
   "decrypted_seed": "64-character-hex"
 }
-GET /generate-2fa
-Generates a valid 6-digit TOTP code (RFC 6238).
+```
 
-Uses UTC time.
+---
 
-Returns remaining validity time in seconds.
+### 🔸 **GET /generate-2fa**
 
-Response
+Returns the current 6-digit TOTP code.
 
-json
-Copy code
+#### **Response**
+
+```json
 {
   "code": "123456",
   "valid_for": 20
 }
-POST /verify-2fa
-Verifies a submitted TOTP code.
+```
 
-Accepts ±30s time window (valid_window = 1).
+---
 
-Request
+### 🔸 **POST /verify-2fa**
 
-json
-Copy code
+Verifies a user-supplied TOTP code.
+
+#### **Request**
+
+```json
 {
   "code": "123456"
 }
-Response
+```
 
-json
-Copy code
+#### **Response**
+
+```json
 {
   "valid": true
 }
-🏃 Running the Project
-Start the Service
-bash
-Copy code
+```
+
+---
+
+# ▶️ Running the Project
+
+### **Build & Start Containers**
+
+```bash
 docker-compose build
 docker-compose up -d
-Stop the Service
-bash
-Copy code
+```
+
+### **Stop Containers**
+
+```bash
 docker-compose down
-🧪 Testing the Endpoints
-1. Decrypt the Seed
-bash
-Copy code
+```
+
+---
+
+# 🧪 Testing the Microservice
+
+---
+
+### **1️⃣ Decrypt the Seed**
+
+```bash
 curl -X POST http://localhost:8080/decrypt-seed \
   -H "Content-Type: application/json" \
   -d "{\"encrypted_seed\": \"$(cat encrypted_seed.txt)\"}"
-2. Generate TOTP
-bash
-Copy code
+```
+
+---
+
+### **2️⃣ Generate a TOTP Code**
+
+```bash
 curl http://localhost:8080/generate-2fa
-3. Verify Valid Code
-bash
-Copy code
+```
+
+---
+
+### **3️⃣ Verify a Valid Code**
+
+```bash
 CODE=$(curl -s http://localhost:8080/generate-2fa | jq -r '.code')
 
 curl -X POST http://localhost:8080/verify-2fa \
   -H "Content-Type: application/json" \
   -d "{\"code\":\"$CODE\"}"
-4. Verify Invalid Code
-bash
-Copy code
+```
+
+---
+
+### **4️⃣ Verify an Invalid Code**
+
+```bash
 curl -X POST http://localhost:8080/verify-2fa \
   -H "Content-Type: application/json" \
   -d "{\"code\":\"000000\"}"
-5. Check Cron Output
-bash
-Copy code
+```
+
+---
+
+### **5️⃣ Check Cron Output**
+
+```bash
 docker exec pki-2fa-service cat /cron/last_code.txt
-📦 Docker Volumes
-seed-data → /data (persists decrypted seed)
+```
 
-cron-output → /cron (stores cron-generated TOTP log)
+---
 
-🔒 Security Notes
-Keys included are for assignment use only.
+# 📦 Docker Volumes
 
-Do not reuse these keys in any real system.
+| Volume      | Mount Path |
+| ----------- | ---------- |
+| seed-data   | /data      |
+| cron-output | /cron      |
 
-Required crypto algorithms:
+These ensure decrypted seed and cron logs persist across container restarts.
 
-RSA-OAEP-SHA256 (decryption)
+---
 
-RSA-PSS-SHA256 (signing)
+# 🔒 Security Notes
 
-RSA-OAEP-SHA256 (signature encryption)
+* Keys in this repository are **for assignment use only**.
+* Do **NOT** reuse these keys in real systems.
+* Implements required cryptographic algorithms:
 
-📤 Submission Deliverables
-GitHub Repository URL
+  * **RSA-OAEP-SHA256** (decryption)
+  * **RSA-PSS-SHA256** (signing)
+  * **RSA-OAEP-SHA256** (signature encryption)
 
-Commit Hash
+---
 
-Encrypted Commit Signature (Base64, single line)
+# 📤 Submission Deliverables
 
-Student Public Key
+Submit:
 
-Encrypted Seed
+* GitHub repository URL
+* Latest commit hash
+* Base64 encrypted commit signature
+* Student public key
+* Encrypted seed
+* Running Dockerized microservice
+* Cron log output showing valid TOTP codes
 
-Working Dockerized Microservice
+---
 
-Cron Output
+# ✅ Completion Checklist
 
-✔ Completed Requirements Checklist
-Functional 2FA microservice (3 endpoints)
-
-RSA/OAEP-SHA256 decryption working
-
-TOTP generation & verification correct
-
-Cron job logs codes every minute
-
-Seed persists using Docker volumes
-
-Multi-stage Dockerfile implemented
-
-docker-compose configured correctly
-
-RSA-PSS commit proof implemented
-
-All required files committed
-
-Correct .gitattributes + .gitignore
-
-Full testing completed successfully
+* ✔ Three working REST API endpoints
+* ✔ RSA/OAEP-SHA256 decryption
+* ✔ Correct TOTP generation
+* ✔ Verification with ±1 time window
+* ✔ Cron job logging every minute
+* ✔ Seed persists using Docker volumes
+* ✔ Multi-stage Dockerfile implemented
+* ✔ docker-compose.yml configured correctly
+* ✔ RSA-PSS commit proof working
+* ✔ All required files committed
+* ✔ `.gitattributes` ensures LF endings
+* ✔ All functional tests passed

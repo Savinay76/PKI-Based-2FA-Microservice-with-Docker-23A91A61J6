@@ -1,4 +1,5 @@
 encrypted_seed.txt
+cron/2fa-cron text eol=lf
 
 
 __pycache__/
